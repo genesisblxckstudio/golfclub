@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GOLF CLUB — афиша</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#07060a;--panel:#111017;--line:#2a2733;--text:#ece9f2;--muted:#8d879b;--accent:#b9a7ff;--err:#ff8a8a}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(1200px 700px at 20% -10%,#1b1430 0%,transparent 60%),radial-gradient(900px 600px at 110% 110%,#0f2228 0%,transparent 55%),var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,sans-serif}
+  main{max-width:980px;margin:0 auto;padding:32px 16px 48px;display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:32px;align-items:start}
+  h1{font:300 34px/1.05 Unbounded,sans-serif;letter-spacing:.02em;margin:0 0 4px}
+  h1 em{font-style:normal;color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 24px}
+  form{display:grid;gap:14px}
+  label{display:grid;gap:6px;font-size:13px;color:var(--muted)}
+  input,textarea{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:12px 14px;font:inherit}
+  input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  textarea{resize:vertical;min-height:64px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hint{font-size:12px;color:var(--muted)}
+  button{background:var(--text);color:#0b0a0f;border:0;border-radius:999px;padding:14px 20px;font:500 15px Unbounded,sans-serif;cursor:pointer;margin-top:6px}
+  button:disabled{opacity:.45;cursor:wait}
+  .ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .status{min-height:22px;font-size:13px;color:var(--muted)}
+  .status.err{color:var(--err)}
+  .preview{position:relative;aspect-ratio:9/16;max-height:82vh;border-radius:16px;border:1px solid var(--line);background:var(--panel);overflow:hidden;display:grid;place-items:center;margin:0 auto;width:100%;max-width:460px}
+  .preview img{width:100%;height:100%;object-fit:cover;display:block}
+  .preview .empty{color:var(--muted);text-align:center;padding:24px;font-size:13px}
+  .actions{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+  .actions a,.actions button{margin:0}
+  a.btn{display:inline-block;text-decoration:none;background:var(--text);color:#0b0a0f;border-radius:999px;padding:12px 20px;font:500 14px Unbounded,sans-serif}
+  .bar{position:absolute;left:0;bottom:0;height:3px;background:var(--accent);width:0;transition:width .8s ease}
+  @media (max-width:760px){main{grid-template-columns:1fr;gap:24px}h1{font-size:28px}}
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>GOLF CLUB<br><em>this week”</em></h1>
+    <p class="sub">Сторис-афиша 9:16. Введи дату и диджея — фон каждый раз новый.</p>
+    <form id="f">
+      <label>Пароль
+        <input id="password" type="password" autocomplete="current-password" required>
+      </label>
+      <div class="row">
+        <label>Дата
+          <input id="date" type="date" required>
+        </label>
+        <label>Время
+          <input id="time" type="text" value="22:00" placeholder="22:00" maxlength="5">
+        </label>
+      </div>
+      <div class="hint" id="datePreview">&nbsp;</div>
+      <label>Диджей <span class="hint">— пусто, если никто не играет</span>
+        <input id="dj" type="text" maxlength="40" placeholder="например, Nastya Muravyova">
+      </label>
+      <label>Пожелание к фону <span class="hint">— необязательно</span>
+        <textarea id="wish" maxlength="300" placeholder="например: рыцарь под водой, красный свет"></textarea>
+      </label>
+      <button id="go" type="submit">Сделать афишу</button>
+      <div class="status" id="status"></div>
+    </form>
+  </section>
+  <section>
+    <div class="preview" id="preview">
+      <div class="empty">Здесь появится афиша.<br>Генерация занимает около минуты.</div>
+      <div class="bar" id="bar"></div>
+    </div>
+    <div class="actions" id="actions" hidden>
+      <a class="btn" id="download" download>Скачать</a>
+      <button class="ghost" id="again" type="button">Другой фон</button>
+    </div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const DAYS = ["su","mo","tu","we","th","fr","sat"];
+let lastStep1 = null, lastFields = null;
+
+try { $("password").value = localStorage.getItem("gc_pass") || ""; } catch {}
+
+function posterDate(v) {
+  if (!v) return "";
+  const [y,m,d] = v.split("-").map(Number);
+  const wd = DAYS[new Date(y, m-1, d).getDay()];
+  return String(d).padStart(2,"0") + "." + String(m).padStart(2,"0") + "." + wd;
+}
+$("date").addEventListener("input", () => {
+  const p = posterDate($("date").value);
+  $("datePreview").textContent = p ? "На афише: " + p : " ";
+});
+
+function status(msg, err) { const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!err); }
+function progress(p) { $("bar").style.width = p + "%"; }
+function busy(b) { $("go").disabled = b; $("again").disabled = b; }
+
+async function call(payload) {
+  const r = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  let j = {};
+  try { j = await r.json(); } catch {}
+  if (!r.ok) throw new Error(j.error || ("Ошибка " + r.status));
+  return j;
+}
+
+function show(img) {
+  const url = "data:" + img.mimeType + ";base64," + img.data;
+  const pv = $("preview");
+  pv.querySelector(".empty")?.remove();
+  let el = pv.querySelector("img");
+  if (!el) { el = document.createElement("img"); el.alt = "Афиша"; pv.prepend(el); }
+  el.src = url;
+  const name = "golfclub-" + lastFields.date.replace(/\./g,"-") + (lastFields.dj ? "-" + lastFields.dj.toLowerCase().replace(/[^a-z0-9]+/g,"-") : "") + ".png";
+  $("download").href = url; $("download").download = name;
+  $("actions").hidden = false;
+}
+
+async function runBg() {
+  status("Шаг 2 из 2: рисую новый фон…"); progress(60);
+  const out = await call({ step: "bg", image: lastStep1.data, ...lastFields });
+  progress(100); show(out); status("Готово. Проверь текст перед публикацией.");
+}
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const date = posterDate($("date").value);
+  if (!date) return status("Выбери дату", true);
+  const time = $("time").value.trim();
+  if (time && !/^\d{1,2}:\d{2}$/.test(time)) return status("Время в формате 22:00", true);
+  lastFields = { password: $("password").value, date, dj: $("dj").value.trim(), time, wish: $("wish").value.trim() };
+  try { localStorage.setItem("gc_pass", lastFields.password); } catch {}
+  busy(true); $("actions").hidden = true; progress(8);
+  try {
+    status("Шаг 1 из 2: меняю дату и имя…");
+    lastStep1 = await call({ step: "text", ...lastFields });
+    progress(50);
+    await runBg();
+  } catch (err) { status(err.message, true); progress(0); }
+  finally { busy(false); setTimeout(() => progress(0), 1200); }
+});
+
+$("again").addEventListener("click", async () => {
+  if (!lastStep1) return;
+  lastFields.wish = $("wish").value.trim();
+  busy(true);
+  try { await runBg(); } catch (err) { status(err.message, true); }
+  finally { busy(false); setTimeout(() => progress(0), 1200); }
+});
+</script>
+</body>
+</html>
