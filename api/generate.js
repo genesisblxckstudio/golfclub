@@ -85,6 +85,8 @@ Remove the current background entirely. NEW BACKGROUND: ${scene}.
 
 ${BLUR}
 
+FRAMING IS LOCKED: keep exactly the same canvas, crop and scale as the input image. Do not zoom in, do not crop, do not reframe. The whole poster must stay visible, including the bottom row: the date "${texts.find((t) => /^\d{2}\.\d{2}\./.test(t))}" with "PRAGUE" in the bottom-left corner and the ornamental logo with "BUDECSKA 28" in the bottom-right corner, at the same size and position as in the input.
+
 No extra text, no UI, no watermark.`;
 }
 
@@ -111,6 +113,26 @@ async function callGemini(prompt, imageB64) {
   return { data: d.data, mimeType: d.mimeType || d.mime_type || "image/png" };
 }
 
+// PNG/JPEG size check: the model sometimes returns a reframed image; 9:16 = 0.5625
+function imageRatio(b64) {
+  const buf = Buffer.from(b64.slice(0, 200000), "base64");
+  if (buf.readUInt32BE(0) === 0x89504e47) return buf.readUInt32BE(16) / buf.readUInt32BE(20);
+  for (let i = 2; i < buf.length - 9; ) {
+    if (buf[i] !== 0xff) { i++; continue; }
+    const m = buf[i + 1];
+    if (m >= 0xc0 && m <= 0xc3) return buf.readUInt16BE(i + 7) / buf.readUInt16BE(i + 5);
+    i += 2 + buf.readUInt16BE(i + 2);
+  }
+  return null;
+}
+const ratioOk = (img) => { const r = imageRatio(img.data); return r === null || Math.abs(r - 0.5625) < 0.02; };
+
+async function callChecked(prompt, imageB64) {
+  let out = await callGemini(prompt, imageB64);
+  if (!ratioOk(out)) out = await callGemini(prompt, imageB64); // one retry
+  return out;
+}
+
 const clean = (s, max) => String(s || "").replace(/[\u0000-\u001f"“”]/g, "").trim().slice(0, max);
 
 export default async function handler(req, res) {
@@ -129,7 +151,7 @@ export default async function handler(req, res) {
 
     if (body.step === "text") {
       const tpl = await readFile(path.join(process.cwd(), "assets", "template.png"));
-      const out = await callGemini(textPrompt({ date, dj, time, doors }), tpl.toString("base64"));
+      const out = await callChecked(textPrompt({ date, dj, time, doors }), tpl.toString("base64"));
       return res.status(200).json(out);
     }
     if (body.step === "bg") {
@@ -144,7 +166,7 @@ export default async function handler(req, res) {
       }
       if (dj && time) texts.push(time);
       texts.push(date, "PRAGUE", "BUDECSKA 28");
-      const out = await callGemini(bgPrompt({ texts, wish: clean(body.wish, 300) }), body.image);
+      const out = await callChecked(bgPrompt({ texts, wish: clean(body.wish, 300) }), body.image);
       return res.status(200).json(out);
     }
     return res.status(400).json({ error: "Неизвестный шаг" });
