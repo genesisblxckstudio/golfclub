@@ -54,6 +54,9 @@
         </label>
       </div>
       <div class="hint" id="datePreview">&nbsp;</div>
+      <label>Doors open <span class="hint">— строка под «this week”», пусто — не писать</span>
+        <input id="doors" type="text" value="19:00" placeholder="19:00" maxlength="5">
+      </label>
       <label>Диджей <span class="hint">— пусто, если никто не играет</span>
         <input id="dj" type="text" maxlength="40" placeholder="например, Nastya Muravyova">
       </label>
@@ -129,7 +132,9 @@ $("f").addEventListener("submit", async (e) => {
   if (!date) return status("Выбери дату", true);
   const time = $("time").value.trim();
   if (time && !/^\d{1,2}:\d{2}$/.test(time)) return status("Время в формате 22:00", true);
-  lastFields = { password: $("password").value, date, dj: $("dj").value.trim(), time, wish: $("wish").value.trim() };
+  const doors = $("doors").value.trim();
+  if (doors && !/^\d{1,2}:\d{2}$/.test(doors)) return status("Doors open в формате 19:00", true);
+  lastFields = { password: $("password").value, date, dj: $("dj").value.trim(), time, doors, wish: $("wish").value.trim() };
   try { localStorage.setItem("gc_pass", lastFields.password); } catch {}
   busy(true); $("actions").hidden = true; progress(8);
   try {
