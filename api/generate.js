@@ -29,7 +29,13 @@ const BACKGROUNDS = [
 const BLUR =
   "The whole background is heavily blurred, soft, out of focus and smeared, with film grain and gentle light diffusion, dark and mysterious, abstract rather than detailed, nothing crisp or photographic. Only the background is blurred; the glass letters, ornament and logo stay sharp and refract the background.";
 
-function textPrompt({ date, dj, time }) {
+function doorsLine(doors) {
+  return doors
+    ? `- Directly under "this week“" add one new line "doors open ${doors}" in the same wide extended translucent glass font, at the same small size as the time line "${TEMPLATE.time}", left-aligned with the text above. Push the lines below it down slightly if needed; do not touch the ornament.`
+    : "";
+}
+
+function textPrompt({ date, dj, time, doors }) {
   const keep = `Keep unchanged: "GOLF CLUB", "this week“", "PRAGUE", "BUDECSKA 28", the large central ornament of four mirrored ram-horn spirals, the bottom-right logo, and the background.`;
   const head =
     "Minimal text edit on this poster. Do NOT redesign, move, resize or restyle anything. The background, the central ornament, the logo, all positions and the glass font must stay identical.";
@@ -37,8 +43,9 @@ function textPrompt({ date, dj, time }) {
     return `${head}
 
 Changes:
-1. Remove the lines "${TEMPLATE.name1}", "${TEMPLATE.name2}" and "${TEMPLATE.time}" entirely. Leave that area as clean, empty background (continue the existing background there). Under "this week“" there must be no text at all.
-2. Replace the date "${TEMPLATE.date}" with "${date}" in the exact same wide extended translucent glass font, same size and position.
+- Remove the lines "${TEMPLATE.name1}", "${TEMPLATE.name2}" and "${TEMPLATE.time}" entirely. Leave that area as clean, empty background (continue the existing background there).
+${doors ? doorsLine(doors) + `\n- Apart from "doors open ${doors}", there must be no other text under "this week“".` : `- Under "this week“" there must be no text at all.`}
+- Replace the date "${TEMPLATE.date}" with "${date}" in the exact same wide extended translucent glass font, same size and position.
 
 ${keep}`;
   }
@@ -58,6 +65,7 @@ ${keep}`;
   return `${head}
 
 Change ONLY these texts, rendered in the exact same wide extended translucent glass font, same size and same left alignment as the existing letters:
+${doorsLine(doors)}
 ${nameChange}
 ${timeChange}
 - Replace the date "${TEMPLATE.date}" with "${date}".
@@ -115,17 +123,19 @@ export default async function handler(req, res) {
     const date = clean(body.date, 12);
     const dj = clean(body.dj, 40);
     const time = clean(body.time, 8);
+    const doors = clean(body.doors, 8);
     if (!/^\d{2}\.\d{2}\.(mo|tu|we|th|fr|sat|su)$/.test(date))
       return res.status(400).json({ error: "Неверная дата" });
 
     if (body.step === "text") {
       const tpl = await readFile(path.join(process.cwd(), "assets", "template.png"));
-      const out = await callGemini(textPrompt({ date, dj, time }), tpl.toString("base64"));
+      const out = await callGemini(textPrompt({ date, dj, time, doors }), tpl.toString("base64"));
       return res.status(200).json(out);
     }
     if (body.step === "bg") {
       if (!body.image || body.image.length > 6_000_000) return res.status(400).json({ error: "Нет картинки шага 1" });
       const texts = ["GOLF CLUB", "this week“"];
+      if (doors) texts.push(`doors open ${doors}`);
       if (dj) {
         const w = dj.split(/\s+/);
         const half = Math.ceil(w.length / 2);
